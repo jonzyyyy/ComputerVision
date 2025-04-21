@@ -9,12 +9,30 @@ logging.basicConfig(level=logging.INFO)
 # Please READ before using the script: https://cynapseai.atlassian.net/wiki/x/eIJhK
 
 """
-File-level Documentation:
-This script performs mosaic augmentation on a set of images for use in training object detection models. The mosaic augmentation combines multiple images into one
-by creating an n x n grid, adjusting the bounding boxes of objects accordingly. The script reads images and corresponding YOLO-format label files, applies the augmentation,
-and writes the resulting mosaic images and updated labels to disk.
+Key Configurations Available via Command-Line Arguments:
 
-Note that the script also applies letterboxing (black edges for larger images) automatically to ensure aspect ratio of input photos are kept the same. To disable this,
+Required positional arguments:
+  src_dir           Base source directory containing YOLO-formatted splits (e.g., train/images, train/labels).
+  dest_dir          Base destination directory for augmented mosaic data.
+  label_prefix      Prefix for output file names; results will be named {label_prefix}_mosaic_{index}.jpg/.txt.
+  grid_size         Grid dimension for mosaic (e.g., 2 to create a 2×2 mosaic).
+
+Optional arguments:
+  --splits SPLITS   One or more dataset splits to process (default: ["train"]).
+  --random_crop     Enable pre-letterbox random cropping (default: disabled).
+  --jitter JITTER   Maximum fraction of width/height to crop randomly (default: 0.3).
+  --min_length MIN_LENGTH
+                    Minimum bounding-box side length in pixels; images with smaller objects are skipped (default: -1, no restriction).
+  --enable_letterbox
+                    Enable letterboxing to preserve aspect ratio with padding (default: enabled).
+  --no_letterbox    Disable letterboxing (inverse of --enable_letterbox).
+
+Examples:
+  # 2×2 mosaic, train split only, with random crop and jitter up to 0.2
+  python mosaic_augmentation.py data/raw data/augmented VEHICLE 2 --random_crop --jitter 0.2
+
+  # 3×3 mosaic, train and val splits, letterboxing off
+  python mosaic_augmentation.py data/raw data/augmented BOX 3 --splits train val --no_letterbox
 """
 
 VALID_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png')
@@ -335,13 +353,13 @@ def process_directory(src_base_directory, dest_base_directory, min_length=-1, gr
 
     image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith(VALID_IMAGE_EXTENSIONS)])
 
-    # Filter images based on the minimum bounding box width criterion
+    # Filter images based on the minimum bounding box length criterion
     valid_files = []
     for f in image_files:
         label_path = os.path.join(labels_dir, os.path.splitext(f)[0] + ".txt")
         if is_valid_for_mosaic(label_path, min_length, grid_size, img_size=640):
             valid_files.append(f)
-    logging.info(f"Found {len(image_files)} images, of which {len(valid_files)} pass the min_width criteria for mosaic augmentation.")
+    logging.info(f"Found {len(image_files)} images, of which {len(valid_files)} pass the min_length criteria for mosaic augmentation.")
 
     group_size = grid_size * grid_size
 
@@ -381,8 +399,8 @@ if __name__ == "__main__":
     parser.add_argument("--label", type=str, required=True, help="File prefix for the image and label files.")
     parser.add_argument("--src_dir", type=str, required=True, help="Source directory containing images and labels.")
     parser.add_argument("--dest_dir", type=str, required=True, help="Destination directory for augmented data.")
-    parser.add_argument("--splits", type=str, nargs='+', default=["train"], help="Dataset splits to process (e.g., train, val, test).")
     parser.add_argument("--grid_size", type=int, default=2, help="Grid size for mosaic (e.g., 2 for 2x2 mosaic).")
+    parser.add_argument("--splits", type=str, nargs='+', default=["train"], help="Dataset splits to process (e.g., train, val, test).")
     parser.add_argument("--random_crop", default=False, help="Enable random cropping before letterboxing.")
     parser.add_argument("--jitter", type=float, default=np.random.uniform(0.0, 0.5), help="Jitter fraction for random cropping.")
     parser.add_argument("--min_length", type=int, default=-1, help="Minimum bounding box length required. -1 if there is no restriction")
